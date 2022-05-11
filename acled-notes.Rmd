@@ -1,0 +1,51 @@
+---
+title: "ACLED Notes"
+output: html_notebook
+---
+
+The code in these notes is based on an analysis of the Middle East and Asia regions on [Kaggle](https://www.kaggle.com/code/apalempa/acled-exploratory-analysis/script).
+
+##Libraries
+
+```{r libraries}
+library(tibble)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(leaflet)
+library(cowplot)
+library(fpp3)
+```
+
+##Data
+I already saved an RDS of the data previously.
+
+```{r read-data}
+acled_data <- readRDS("data/acled-data-2022-05-11.rds") %>% as_tibble()
+```
+
+## Top 10 countries with highest fatalities
+
+```{r top-ten-deaths}
+analysis_year <- 2017
+deaths <- acled_data %>%
+  filter(YEAR >= analysis_year) %>%
+  group_by(COUNTRY) %>%
+  summarise(Total = sum(FATALITIES))
+
+top_ten_deaths <- slice_max(deaths, order_by = Total, n = 10)
+
+top_ten_deaths %>%
+  ggplot(aes(reorder(x = COUNTRY, Total), y = Total)) +
+  scale_y_continuous(labels = scales::comma) +
+  geom_bar(stat = "identity", fill = "sky blue") +
+  geom_text( aes(label = scales::comma(Total)),hjust = 1.2) +
+  xlab("Country") + 
+  ylab("Fatalities") + 
+  ggtitle(paste("Top 10 countries with highest fatalities since ", analysis_year)) +
+  coord_flip() +
+  theme_cowplot()
+```
+
+## Total number of fatalities grouped by region
+

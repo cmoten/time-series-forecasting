@@ -1,9 +1,17 @@
 library(readxl)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(leaflet)
+library(cowplot)
 library(fpp3)
 
 #'Tidy Data
 acled_data <- read_excel("data/Africa_1997-2022_Apr22.xlsx")
+acled_data$DATE <- format(as.Date(acled_data$EVENT_DATE, format="%d %B %Y"),"%d-%B")
+acled_data$EVENT_MONTH <- format(as.Date(acled_data$EVENT_DATE, format="%d %B %Y"),"%B")
 
+#'Test Time Series Analysis
 test_data <- acled_data %>%
   select(EVENT_DATE, EVENT_TYPE, SUB_EVENT_TYPE, COUNTRY) %>%
   mutate(Quarter = yearquarter(EVENT_DATE)) %>%
