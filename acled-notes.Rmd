@@ -5,9 +5,9 @@ output: html_notebook
 
 The code in these notes is based on an analysis of the Middle East and Asia regions on [Kaggle](https://www.kaggle.com/code/apalempa/acled-exploratory-analysis/script).
 
-##Libraries
+## Libraries
 
-```{r libraries}
+```{r libraries, message=FALSE}
 library(tibble)
 library(ggplot2)
 library(dplyr)
@@ -15,9 +15,11 @@ library(lubridate)
 library(leaflet)
 library(cowplot)
 library(fpp3)
+library(tidyr)
 ```
 
-##Data
+## Data
+
 I already saved an RDS of the data previously.
 
 ```{r read-data}
@@ -48,4 +50,64 @@ top_ten_deaths %>%
 ```
 
 ## Total number of fatalities grouped by region
+
+```{r deaths-by-region}
+
+acled_data %>%
+  filter(YEAR >= analysis_year) %>%
+  group_by(REGION) %>%
+  summarise(Total = sum(FATALITIES)) %>%
+  ggplot(aes(reorder(x = REGION, Total), y = Total)) +
+  scale_y_continuous(labels = scales::comma) +
+  geom_bar(stat = "identity", fill = "sky blue") +
+  geom_text( aes(label = scales::comma(Total))) +
+  xlab("Region") + 
+  ylab("Fatalities") + 
+  ggtitle(paste("Fatalities by region since ", analysis_year)) +
+  coord_flip() +
+  theme_cowplot()
+```
+
+## Actor Analysis
+
+### Data
+
+```{r actor-ts-data-}
+veo_tsdata <- acled_data %>%
+  filter(grepl("Mayi", ACTOR1)) %>%
+  select(EVENT_DATE, EVENT_TYPE, SUB_EVENT_TYPE, COUNTRY) %>%
+  mutate(Quarter = yearquarter(EVENT_DATE)) %>%
+  select(-EVENT_DATE) %>%
+  group_by(Quarter, COUNTRY) %>%
+  count() %>%
+  as_tsibble(key = c(COUNTRY),
+            index = Quarter) %>%
+  fill_gaps(n = 0) %>%
+  ungroup()
+
+```
+
+### Plots
+
+```{r}
+# veo_tsdata %>%
+#   autoplot(n) +
+#   facet_grid(COUNTRY ~ ., scales = "free")
+
+veo_tsdata_congo <- veo_tsdata %>%
+  filter(COUNTRY == "Democratic Republic of Congo", year(Quarter) >= 2015)
+
+fit_tsmodel <- veo_tsdata_congo %>%
+  model(TSLM(n ~ trend() + season()))
+
+fc_model <- forecast(fit_tsmodel)
+
+fc_model %>%
+  autoplot(veo_tsdata_congo) +
+  labs(
+    title = "Forecast of events using regression",
+    y = "Number of Events"
+  )
+```
+
 
