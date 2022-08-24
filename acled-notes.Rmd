@@ -74,14 +74,14 @@ acled_data %>%
 
 ```{r actor-ts-data-}
 veo_tsdata <- acled_data %>%
-  filter(grepl("Mayi", ACTOR1)) %>%
+  filter(grepl("JNIM", ACTOR1)) %>%
   select(EVENT_DATE, EVENT_TYPE, SUB_EVENT_TYPE, COUNTRY) %>%
-  mutate(Quarter = yearquarter(EVENT_DATE)) %>%
+  mutate(Month= yearmonth(EVENT_DATE)) %>%
   select(-EVENT_DATE) %>%
-  group_by(Quarter, COUNTRY) %>%
+  group_by(Month, COUNTRY) %>%
   count() %>%
   as_tsibble(key = c(COUNTRY),
-            index = Quarter) %>%
+            index = Month) %>%
   fill_gaps(n = 0) %>%
   ungroup()
 
@@ -95,7 +95,7 @@ veo_tsdata <- acled_data %>%
 #   facet_grid(COUNTRY ~ ., scales = "free")
 
 veo_tsdata_congo <- veo_tsdata %>%
-  filter(COUNTRY == "Democratic Republic of Congo", year(Quarter) >= 2015)
+  filter(COUNTRY == "Mali", year(Month) >= 2015)
 
 fit_tsmodel <- veo_tsdata_congo %>%
   model(TSLM(n ~ trend() + season()))
@@ -109,5 +109,4 @@ fc_model %>%
     y = "Number of Events"
   )
 ```
-
 
