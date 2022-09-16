@@ -1,12 +1,19 @@
 ---
 title: "Counterfactual Analysis"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 These notes follows the code shown in the [Foundations of Program Evaluation](https://ds4ps.org/pe4ps-textbook/docs/index.html) textbook.
 
+# Libraries
+
 ```{r libraries, message=FALSE}
 library(tidyverse)
+library(cowplot)
+library(fpp3)
+library(Wats)
 ```
 
 # Interrupted Time Series
@@ -40,7 +47,9 @@ fake_data %>%
   ggplot(aes(x = time, y = ex1)) +
   geom_jitter(colour = "#BEAFC2") +
   ylab(label = "Tobacco Consumption") +
-  geom_smooth(method = "lm", se = FALSE) +
+  geom_smooth(formula = y ~ x,
+    method = "lm", 
+    se = FALSE) +
   geom_segment(
     x = 10,
     xend = 10,
@@ -64,7 +73,9 @@ fake_data %>%
   ggplot(aes(x = time, y = ex2, color = treatment)) +
   geom_jitter() +
   ylab(label = "Tobacco Consumption") +
-   geom_smooth(method = lm, se = FALSE)+
+   geom_smooth(formula = y ~ x,
+     method = lm, 
+     se = FALSE)+
   ylim(c(0, 15)) +
   geom_segment(
     x = 10,
@@ -90,7 +101,9 @@ fake_data %>%
   ggplot(aes(x = time, y = ex3, color = treatment)) +
   geom_jitter() +
   ylab(label = "Tobacco Consumption") +
-   geom_smooth(method = lm, se = FALSE)+
+   geom_smooth(formula = y ~ x,
+     method = lm, 
+     se = FALSE)+
   ylim(c(0, 15)) +
   geom_segment(
     x = 10,
@@ -118,7 +131,9 @@ fake_data %>%
   ggplot(aes(x = time, y = ex4, color = treatment)) +
   geom_jitter() +
   ylab(label = "Tobacco Consumption") +
-   geom_smooth(method = lm, se = FALSE)+
+   geom_smooth(formula = y ~ x,
+     method = lm, 
+     se = FALSE)+
   ylim(c(0, 15)) +
   geom_segment(
     x = 10,
@@ -265,3 +280,131 @@ dataTS %>%
   theme_minimal()
 ```
 
+## Oklahoma City Bombing Study
+
+This analysis replicates a study conducted by [Rogers, John, and Coleman (2005)](https://www.researchgate.net/profile/Joe-Rodgers-2/publication/7310350_Did_Fertility_Go_Up_After_the_Oklahoma_City_Bombing_An_Analysis_of_Births_in_Metropolitan_Counties_in_Oklahoma_1990-1999/links/5550b57408ae12808b390538/Did-Fertility-Go-Up-After-the-Oklahoma-City-Bombing-An-Analysis-of-Births-in-Metropolitan-Counties-in-Oklahoma-1990-1999.pdf). In essence, there is a theory that birth rates tend to change in relation to sociocultural situations such as major disasters. ndividuals feel more prone to have children as a response to major life losses or because they feel closer to traditional values (such as having a family) when unexpected events occur. By contrast, they might be less willing to have children when experiencing events that negatively affect their life style.
+
+### Data
+The data has over 1,400 observations with a total of 12 variables. You can find the details by typing the command `?CountyMonthBirthRate2014Version`.
+
+```{r okc-data}
+data(CountyMonthBirthRate2014Version)
+okc_data <- CountyMonthBirthRate2014Version %>%
+  filter(CountyName == "oklahoma")
+rm(CountyMonthBirthRate2014Version)
+dplyr::glimpse(okc_data)
+```
+
+### Plot of Data
+```{r okc-data-plot}
+okc_birth_rate <- okc_data %>%
+  mutate(Month = yearmonth(Date)) %>%
+  group_by(Month) %>%
+  summarise(monthly_average = mean(BirthRate)) %>%
+  as_tsibble(index = Month)
+
+okc_birth_rate %>%
+  ggplot(aes(x = as.Date(Month), y = monthly_average)) +
+  geom_line() +
+  labs(x = "Date",
+       y = "GFR(per thousand women 15-44)", 
+       title = "Oklahoma County GFRs") +
+  geom_vline(xintercept = as.Date(okc_birth_rate$Month[64]), lty = 2, color="darkorange2") +
+  geom_text(
+    label = "OKC Bombing",
+    x = as.Date(okc_birth_rate$Month[64]),
+    y = 80,
+    hjust = -0.1,
+    color = "darkorange2"
+  ) +
+  theme_minimal()
+```
+
+### Create New Features
+```{r okc-features}
+# Create a time variable from 1 to last row of the dataset
+okc_data$time <- rep( 1 : nrow( okc_data)) 
+
+# Create a dummy variable equal to 1 if after 1995 or after May 1995, and equal to 0 otherwise
+okc_data$treatment <- ifelse( okc_data$Year > 1995 | okc_data$Year == 1995 & okc_data$Month >= 5, 1, 0)
+
+# Time since event occured
+okc_data$time_after_event <- ifelse(okc_data$time <= 64, 0, okc_data$time - 64)
+# If we look at the frequency of the treatment variable, we see that 64 rows has received no treatment and 56 rows did receive the treatment. 
+table(okc_data$treatment)
+```
+
+### Regression Model
+```{r okc-reg}
+okc_model <- lm(
+  BirthRateMonthly ~
+    time +
+    treatment +
+    time_after_event,
+  data = okc_data
+)
+
+okc_model_stats <- broom::tidy(okc_model)
+okc_model_stats$term <- c("Constant", "Time", "Treatment", "Time Since Treatment")
+okc_model_stats
+```
+
+#### 1. What was the trend of the birth rate before the event?
+The model shows a slight downward monthly trend in the birth rate before the bombing. While it is rather small, it is statistically significantly different from zero.
+
+#### 2. What was the change in the birth rate immediatedly after the event?
+The birth rate did not change significantly from zero, thus there was not likely an immediate effect.
+
+#### 3. What is the trend of the birth rate after the event?
+The model shows an upward monthly trend in the birth rate after the bombing that was almost three times the magnitude from the birth rate before the bombing. Specifically, the absolute difference, in aggregate, was approximately 0.009 births per month. This factor is statistically significantly different from zero which suggests a long-term sustaining effect.
+
+```{r}
+okc_data %>%
+  ggplot(aes(x = time, y = BirthRateMonthly)) +
+  geom_point() +
+  labs(
+    x = "Time (months)",
+    y = "Monthly GFR (per thousand women 15-44)"
+  ) +
+  geom_smooth(formula = y ~ x, 
+              method = "loess", 
+              se = FALSE) +
+  geom_vline(xintercept = 64,
+             lty = 2,
+             color = "darkorange2") +
+  geom_text(
+    label = "OKC Bombing",
+    x = 64,
+    y = 6.5,
+    hjust = -0.1,
+    color = "darkorange2"
+  ) +
+  theme_minimal()
+
+```
+
+### Reaximination of the effect after event
+The previous analysis showed there was not an immediate effect after the bombing. The authors origninally hypothesized this could be due to the time it takes for a pregnancy to complete its full gestation period.
+
+```{r okc-data-update}
+# Our new treatment variable is equal to 1 if the bombing has occured and 9 months have passed.It is equal to zero otherwise.
+okc_data$treatment2 <- ifelse( okc_data$Year > 1996 | okc_data$Year == 1996 & okc_data$Month >= 2, 1, 0)
+
+# Our Time Since Treatment variable starts 9 months after the bombing, instead than at the time of the bombing.
+okc_data$new_time_after_event <- ifelse(okc_data$time <= 73, 0, okc_data$time - 73)
+
+#New regression model
+okc_model2 <- lm(
+  BirthRateMonthly ~
+    time +
+    treatment2 +
+    new_time_after_event,
+  data = okc_data
+)
+
+okc_model2_stats <- broom::tidy(okc_model2)
+okc_model2_stats$term <- c("Constant", "Time", "Treatment", "Time Since Treatment")
+okc_model2_stats
+```
+
+The coefficient for the treatment variable is also not sigificantly different from zero, thus it is likely the bombing did not contribute 
