@@ -1,0 +1,267 @@
+---
+title: "Counterfactual Analysis"
+output: html_notebook
+---
+
+These notes follows the code shown in the [Foundations of Program Evaluation](https://ds4ps.org/pe4ps-textbook/docs/index.html) textbook.
+
+```{r libraries, message=FALSE}
+library(tidyverse)
+```
+
+# Interrupted Time Series
+
+## General Concept
+
+Interrupted time series analysis is useful for longitudinal data with the goal of analyzing change with an outcome variable based on some type of intervention. In general, there are four types of effect to analyze:
+
+* No effect
+* Immediate but not a sustained effect
+* Not immediate but a sustained effect
+* Immediate and sustained effect
+
+```{r fake-data}
+fake_data <- data.frame(
+  time = 0:20,
+  ex1 = 1:21,
+  ex2 = c(1:11, 2:11),
+  ex3 = c(1:11, 11, 11, 9, 11, 9:4),
+  ex4 = c(1:11, 8,8,8:1),
+  treatment = c(rep("a", 11), rep("b", 10))
+)
+```
+
+
+For instance the plot below shows an intervention that had no effect on the variable of interest
+
+```{r ex1}
+fake_data %>%
+  select(time, ex1) %>%
+  ggplot(aes(x = time, y = ex1)) +
+  geom_jitter(colour = "#BEAFC2") +
+  ylab(label = "Tobacco Consumption") +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_segment(
+    x = 10,
+    xend = 10,
+    y = 0,
+    yend = 20,
+    linetype = 2,
+    color = "grey"
+  ) +
+  geom_label(
+    label = "Policy Intervention",
+    x = 10,
+    y = 20
+  ) +
+  theme_minimal()
+```
+
+This plot is an example of an intervention that has an immediate but not a sustained effect
+```{r ex2}
+fake_data %>%
+  select(-ex1) %>%
+  ggplot(aes(x = time, y = ex2, color = treatment)) +
+  geom_jitter() +
+  ylab(label = "Tobacco Consumption") +
+   geom_smooth(method = lm, se = FALSE)+
+  ylim(c(0, 15)) +
+  geom_segment(
+    x = 10,
+    xend = 10,
+    y = 0,
+    yend = 15,
+    linetype = 2,
+    color = "grey"
+  ) +
+  geom_label(
+    label = "Policy Intervention",
+    x = 10,
+    y = 15
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+This plot has no immediate effect, but a sustained long-term effect
+```{r ex3}
+fake_data %>%
+  select(-c(ex1, ex2)) %>%
+  ggplot(aes(x = time, y = ex3, color = treatment)) +
+  geom_jitter() +
+  ylab(label = "Tobacco Consumption") +
+   geom_smooth(method = lm, se = FALSE)+
+  ylim(c(0, 15)) +
+  geom_segment(
+    x = 10,
+    xend = 10,
+    y = 0,
+    yend = 15,
+    linetype = 2,
+    color = "grey"
+  ) +
+  geom_label(
+    label = "Policy Intervention",
+    x = 10,
+    y = 15
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+This final plot shows an immediate and sustained effect.
+
+```{r ex4}
+fake_data %>%
+  select(-c(ex1, ex2, ex3)) %>%
+  ggplot(aes(x = time, y = ex4, color = treatment)) +
+  geom_jitter() +
+  ylab(label = "Tobacco Consumption") +
+   geom_smooth(method = lm, se = FALSE)+
+  ylim(c(0, 15)) +
+  geom_segment(
+    x = 10,
+    xend = 10,
+    y = 0,
+    yend = 15,
+    linetype = 2,
+    color = "grey"
+  ) +
+  geom_label(
+    label = "Policy Intervention",
+    x = 10,
+    y = 15
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+## Statistical Model
+The general mathematical model is
+
+$$
+Y = b_0 + b_1T + b_2D + b_3P+ e
+$$
+
+Where:
+
+$Y$ is the outcome variable
+
+$T$ is a continuous variable representing time
+
+$D$ is a dummy variable where 0 is a collection before the intervention and 1 is a collection after the intervention
+
+$P$ is a continuous variable representing time passed since the intervention occured
+
+$b_0$ is the baseline average of the outcome variable
+
+$b_1$ is the pre-intervention slope
+
+$b_2$ is the magnitude of the immediate effect
+
+$b_3$ is the post-intervention slope
+
+$e$ is an error term to account for noise in the data
+
+## Counterfactual
+
+The basic concept of the counterfactual is to examine what would happen to the trend had the intervention not occured vice the current trend after enactment of the intervention.
+
+Hence, the base equation for the non-intervention reduces to:
+
+$$
+\hat{Y} = b_0 + b_1T + e
+$$
+Thus, for any time period after the implementation of the intervention you are calculating the residual of $Y - \hat{Y}$ which represents a measure of the impact of the intervention. To put it another way
+$$
+Y - \hat{Y} = b_2D + b_3P
+$$
+
+## Example
+
+### Data
+The dataset contains 365 daily observations of the wellbeing of a class of students. Wellbeing is measured by a index from 0 to 300. At t = 201 students will start attend a mental health education class. We want to understand how (and if) their wellbeing improves.
+
+```{r get-data}
+URL <- "https://github.com/DS4PS/pe4ps-textbook/blob/master/data/time-series-example.rds?raw=true"
+dataTS <- readRDS(gzcon(url( URL )))
+dplyr::glimpse(dataTS)
+```
+
+### Plot of Data
+```{r data-plot}
+ts_reg <- lm(Y ~ T + D + P, data = dataTS)
+
+dataTS %>%
+  ggplot(aes(x = T, y = Y)) +
+  geom_point(color = "grey") +
+  xlab(label = "Time (days)") +
+  ylab(label = "Wellbeing Index") +
+  geom_segment(
+    x = 200,
+    xend = 200,
+    y = 0,
+    yend = 300,
+    linetype = 2,
+    color = "firebrick"
+  ) +
+  geom_text(
+    label = "Start of classes",
+    x = 200,
+    y = 300,
+    hjust = -0.1,
+    color = "firebrick"
+  ) +
+  geom_line(aes(T, ts_reg$fitted.values), color = "steelblue", lty = 2) +
+  theme_minimal()
+```
+
+### View the model
+```{r model-view}
+model_stats <- broom::tidy(ts_reg)
+model_stats$term <- c("Constant", "Time", "Treatment", "Time Since Treatment")
+model_stats
+```
+
+A review of the model statistics show that the average increased at a rate of 0.19 points per day before the attending the class. Immediately following the class, the average well being increased by 13 points followed by a sustained average increase of 0.54 points per day.
+
+### Counterfactual Plot
+```{r plot-counterfactual}
+pred <- predict(ts_reg, dataTS)
+datanew <- as.data.frame(cbind(T = rep(1 : 365), D = rep(0), P = rep(0))) 
+pred_cf <- predict(ts_reg, datanew)
+cf_color <- c(rep("dodgerblue4", 200), rep("darkorange2", 165))
+
+dataTS %>%
+  ggplot(aes(x = T, y = Y)) +
+  geom_point(color = "grey") +
+  xlab(label = "Time (days)") +
+  ylab(label = "Wellbeing Index") +
+  geom_segment(
+    x = 200,
+    xend = 200,
+    y = 0,
+    yend = 300,
+    linetype = 2,
+    color = "darkorange2"
+  ) +
+  geom_text(
+    label = "Start of classes",
+    x = 200,
+    y = 300,
+    hjust = -0.1,
+    color = "darkorange2"
+  ) +
+  geom_line(aes(T, pred), color = "dodgerblue4") +
+  geom_line(aes(T, pred_cf), color = cf_color) +
+    geom_text(
+    label = "Counterfactual",
+    x = 330,
+    y = 100,
+    color = "darkorange2"
+  ) +
+  theme_minimal()
+```
+

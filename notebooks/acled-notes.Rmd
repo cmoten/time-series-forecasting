@@ -23,7 +23,7 @@ library(tidyr)
 I already saved an RDS of the data previously.
 
 ```{r read-data}
-acled_data <- readRDS("data/acled-data-2022-05-11.rds") %>% as_tibble()
+acled_data <- readRDS("../data/acled-data-2022-05-11.rds") %>% as_tibble()
 ```
 
 ## Top 10 countries with highest fatalities
@@ -109,4 +109,3 @@ fc_model %>%
     y = "Number of Events"
   )
 ```
-

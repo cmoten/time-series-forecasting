@@ -46,7 +46,8 @@ jnim_events <- acled_data %>%
   as_tsibble(index = Month)
 
 jnim_events %>%
-  autoplot(n)
+  autoplot(n) +
+  labs(y = "Number of Events", title = "JNIM Events by Month")
 
 jnim_events_by_type <- acled_data %>%
   filter(grepl("JNIM:", ACTOR1)) %>%
@@ -60,6 +61,15 @@ jnim_events_by_type %>%
   autoplot(n) +
   facet_wrap(~EVENT_TYPE + SUB_EVENT_TYPE) +
   theme(legend.position = "None")
-  
 
+fit <- jnim_events %>%
+  model(ETS(n))
+report(fit)  
 
+components(fit) %>%
+  autoplot() +
+  labs(title = "ETS(M,A,N) components")
+
+fit %>%
+  forecast(h = 3) %>%
+  autoplot(jnim_events)
